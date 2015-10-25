@@ -1,0 +1,128 @@
+---
+title: "PractMachLearn Project"
+author: "Le Gru"
+date: "October 14, 2015"
+output: html_document
+---
+Load all  training and test data
+
+```{r data.loading}
+# this code is needed only to move to the correct working directory in R
+# you may have to modify this code if run in an environment different than mine
+
+# reset the working directory to where the code is.
+project.dir= "C:/Users/Massimo/OneDrive/Documents/GitHub/Coursera/DataScience/PractMachLearninng/Project/"
+setwd(project.dir)
+
+# training and test data
+data.file.tr= paste(project.dir, "pml-training.csv", sep="/")
+data.file.tst= paste(project.dir, "pml-testing.csv", sep="/")
+
+# read the files
+tr.data.raw= read.csv(file = data.file.tr)
+tst.data.raw= read.csv(file = data.file.tst)
+```
+
+Many colums are either full of NA, or empty  strings.
+
+These  colums need to be removed because they do not bring any information to the learning process
+
+The clean up process is based on the funnction "clean.data" that is used to clean.up the train
+data and consequently the test data.
+
+
+```{r data.clean.up}
+
+## input: data:  train or test data
+## output: a cleaned data frame
+clean.data <- function(data) {
+  # exploit for with sie effectss
+  # loop througnn  the colums in decesing order to avoid indexing problems
+  for (colindex in dim(data)[2]:1) { 
+    # get the ith  colum
+    col=data[,colindex]
+    # check  whether the column has more than 90% NAs (in  the data set is about 97%) 
+    if (sum(is.na(col))/length(col)*100>90) {
+      # remove colum
+      data[,colindex]=NULL}
+    # check whether the column has more than 90% empty strings (in  the data set is about 97%) 
+    else if (sum(col=="")/length(col)*100>90) {
+      # remove colum
+      data[,colindex]=NULL}
+    #implicit  else -- nothing  to do -- all other cases are fine
+  }
+  # return clean data
+  data}
+
+# cleanup both training and test  data
+tr.data.clean= clean.data(tr.data.raw) 
+tst.data.clean= clean.data(tst.data.raw)
+
+```
+
+Data centering tends to improve the performance of the performance of the learning process.
+
+```{r preprocessing}
+## Note:  for clarity of programming I use multiple data.frames
+## all this can be done  with just tr.data.clean savinng momory operations 
+## and improving efficiency
+
+# preare training and test data
+tr.data=  tr.data.clean
+tst.data=  tst.data.clean
+
+# isolate numeric values
+tr.data.num= tr.data.clean[,7:59]
+tst.data.num= tst.data.clean[,7:59]
+
+#  cennter training data
+center.scale <- function(data) {
+  apply(data,2, function(col){
+    (col-mean(col))/sd(col)
+  })
+}
+tr.data.ctr= center.scale(tr.data.num)
+tst.data.ctr= center.scale(tst.data.num)
+
+# replace the centered data in the training and testing data
+tr.data[,7:59]=  tr.data.ctr
+tst.data[,7:59]=  tst.data.ctr
+
+# remove cvtd_timestamp which seems  to affect the prediction
+tr.data= tr.data[,-1:-6]
+tst.data= tst.data[,-1:-6]
+```
+
+
+Training using random forest in the caret packate
+
+```{r train, cache=T}
+
+library(randomForest)
+
+# fit a random forest
+set.seed(324)
+mod.rf= randomForest(classe ~ ., data= tr.data)
+```
+
+Random forests naturally construct an out of bag evaluation.
+This data can be extracted from the built model
+
+```{r evaluation}
+# estract error rate
+modfit.er= mod.rf$err.rate
+# the oob error rate is the fist element of the list
+modfit.oob_er= modfit.er[,1]
+# mean expected error on the oob
+modfit.m_oob_er= mean(modfit.oob_er)
+```
+
+The expected  error is `modfit.m_oob_er` 
+
+Predition on test data 
+
+```{r prediction}
+prediction= randomForest:::predict.randomForest(mod.rf,tst.data)
+
+prediction
+```
